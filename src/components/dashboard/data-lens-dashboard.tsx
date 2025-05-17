@@ -6,9 +6,9 @@ import {
   UploadCloud,
   TableIcon,
   BarChartBig,
-  LineChart,
+  LineChart as LineChartIcon, // Renamed to avoid conflict with Recharts' LineChart
   PieChartIcon,
-  ScatterChart,
+  ScatterChart as ScatterChartIcon, // Renamed
   Sparkles,
   FileText,
   Trash2,
@@ -56,26 +56,39 @@ import {
   XAxis,
   YAxis,
   CartesianGrid,
-  Tooltip as RechartsTooltip,
-  Legend,
+  Legend as RechartsLegend, // Keep direct Recharts Legend for specific cases if needed, or remove
+  Tooltip as RechartsTooltip, // Keep direct Recharts Tooltip for specific cases if needed, or remove
   Line,
   PieChart,
   Pie,
   Cell as RechartsCell,
   Scatter,
   ZAxis,
+  LineChart, // Recharts LineChart component
+  ScatterChart as RechartsScatterChart, // Recharts ScatterChart component
 } from "recharts";
+import {
+  ChartContainer,
+  ChartTooltip,
+  ChartTooltipContent,
+  ChartLegend,
+  ChartLegendContent,
+  type ChartConfig,
+} from "@/components/ui/chart";
+
 
 type ChartType = "bar" | "line" | "pie" | "scatter";
 
 const CHART_TYPES: { value: ChartType; label: string; icon: React.ElementType }[] = [
   { value: "bar", label: "Bar Chart", icon: BarChartBig },
-  { value: "line", label: "Line Chart", icon: LineChart },
+  { value: "line", label: "Line Chart", icon: LineChartIcon },
   { value: "pie", label: "Pie Chart", icon: PieChartIcon },
-  { value: "scatter", label: "Scatter Chart", icon: ScatterChart },
+  { value: "scatter", label: "Scatter Chart", icon: ScatterChartIcon },
 ];
 
-const CHART_COLORS = ["#8884d8", "#82ca9d", "#ffc658", "#ff7300", "#00C49F", "#FFBB28", "#FF8042"];
+// PIE_CHART_COLORS can be used if specific colors are needed beyond the 5 theme chart colors.
+// const PIE_CHART_COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#AF19FF", "#FF4560", "#775DD0"];
+
 
 export function DataLensDashboard() {
   const [file, setFile] = useState<File | null>(null);
@@ -95,7 +108,7 @@ export function DataLensDashboard() {
     if (selectedFile) {
       setFile(selectedFile);
       setFileName(selectedFile.name);
-      setError(null); // Clear previous errors
+      setError(null);
     }
   };
 
@@ -106,7 +119,7 @@ export function DataLensDashboard() {
     }
     setIsLoading(prev => ({ ...prev, parsing: true }));
     setError(null);
-    setParsedData(null); // Clear previous data
+    setParsedData(null); 
     setSelectedXAxis(null);
     setSelectedYAxis(null);
     setAiInsights(null);
@@ -130,7 +143,6 @@ export function DataLensDashboard() {
         setParsedData(result);
         setFileName(result.fileName || file.name);
         toast({ title: "File Uploaded", description: `${result.fileName || file.name} parsed successfully.` });
-        // Auto-select first two columns if available
         if (result.headers.length > 0) setSelectedXAxis(result.headers[0]);
         if (result.headers.length > 1) setSelectedYAxis(result.headers[1]);
       }
@@ -152,7 +164,6 @@ export function DataLensDashboard() {
     setShowAiInsights(false);
     setAiInsights(null);
     setError(null);
-    // Reset file input
     const fileInput = document.getElementById('file-upload') as HTMLInputElement;
     if (fileInput) fileInput.value = '';
     toast({ title: "Data Cleared", description: "All data and selections have been reset." });
@@ -169,7 +180,7 @@ export function DataLensDashboard() {
     setError(null);
 
     try {
-      const dataForInsights = JSON.stringify(parsedData.rows.slice(0, 50)); // Send a sample for brevity
+      const dataForInsights = JSON.stringify(parsedData.rows.slice(0, 50));
       const result = await generateDataInsights({ excelData: dataForInsights });
       setAiInsights(result.insights);
       toast({ title: "AI Insights Generated", description: "Insights have been successfully generated." });
@@ -177,7 +188,7 @@ export function DataLensDashboard() {
       const errorMessage = e instanceof Error ? e.message : "An unknown error occurred while generating insights.";
       setError("Failed to generate AI insights. " + errorMessage);
       toast({ variant: "destructive", title: "AI Insights Failed", description: errorMessage });
-      setShowAiInsights(false); // Toggle back if error
+      setShowAiInsights(false);
     } finally {
       setIsLoading(prev => ({ ...prev, generatingInsights: false }));
     }
@@ -187,8 +198,7 @@ export function DataLensDashboard() {
     if (showAiInsights && parsedData && parsedData.rows.length > 0 && !aiInsights) {
       handleGenerateInsights();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showAiInsights, parsedData, aiInsights]); // handleGenerateInsights is memoized
+  }, [showAiInsights, parsedData, aiInsights, handleGenerateInsights]);
 
   const chartData = useMemo(() => {
     if (!parsedData || !selectedXAxis || !selectedYAxis || parsedData.rows.length === 0) {
@@ -198,8 +208,8 @@ export function DataLensDashboard() {
     if (selectedChartType === "pie") {
       const counts: Record<string, number> = {};
       parsedData.rows.forEach(row => {
-        const category = String(row[selectedXAxis]);
-        const value = parseFloat(row[selectedYAxis]);
+        const category = String(row[selectedXAxis!]); // selectedXAxis is checked
+        const value = parseFloat(row[selectedYAxis!]); // selectedYAxis is checked
         if (!isNaN(value)) {
           counts[category] = (counts[category] || 0) + value;
         }
@@ -208,11 +218,31 @@ export function DataLensDashboard() {
     }
 
     return parsedData.rows.map(row => ({
-      [selectedXAxis]: row[selectedXAxis],
-      [selectedYAxis]: selectedChartType !== 'scatter' ? parseFloat(String(row[selectedYAxis])) : parseFloat(String(row[selectedYAxis])),
-      // For scatter, Y can also be categorical, but typically numeric. Ensure parseFloat for all numeric axes.
-    })).filter(item => selectedChartType === 'scatter' || !isNaN(item[selectedYAxis]));
+      [selectedXAxis!]: row[selectedXAxis!],
+      [selectedYAxis!]: parseFloat(String(row[selectedYAxis!])), 
+    })).filter(item => !isNaN(item[selectedYAxis!]));
   }, [parsedData, selectedXAxis, selectedYAxis, selectedChartType]);
+
+  const chartConfig = useMemo(() => {
+    if (!selectedYAxis) return {} as ChartConfig;
+
+    if (selectedChartType === 'pie') {
+        // For Pie, dataKey is "value", nameKey is "name".
+        // The legend will pick up "name" and its color from the Cell.
+        // Tooltip will also pick up "name" and "value".
+        // So, a generic config for 'value' might be useful for styling the "value" if referenced directly.
+        return {
+             value: { label: selectedYAxis, color: `hsl(var(--chart-1))` }
+        } satisfies ChartConfig;
+    }
+
+    return {
+      [selectedYAxis]: {
+        label: selectedYAxis,
+        color: `hsl(var(--chart-1))`,
+      },
+    } satisfies ChartConfig;
+  }, [selectedYAxis, selectedChartType]);
 
 
   const renderChart = () => {
@@ -225,11 +255,8 @@ export function DataLensDashboard() {
       );
     }
     
-    // Check if Y-axis data is numeric for charts that require it
-    const yDataIsNumeric = chartData.every(d => typeof d[selectedYAxis] === 'number' && !isNaN(d[selectedYAxis]));
-    if (selectedChartType !== 'pie' && selectedChartType !== 'scatter' && !yDataIsNumeric) {
-         // Pie chart handles non-numeric Y by its nature (counts or sums)
-         // Scatter can handle categorical Y, though less common. For simplicity, we assume numeric for now.
+    const yDataIsNumeric = chartData.every(d => typeof d[selectedChartType === 'pie' ? 'value' : selectedYAxis!] === 'number' && !isNaN(d[selectedChartType === 'pie' ? 'value' : selectedYAxis!]));
+    if (!yDataIsNumeric && selectedChartType !== 'scatter') { // Scatter X can be category
         return <Alert variant="destructive">
             <AlertTriangle className="h-4 w-4" />
             <AlertTitle>Invalid Y-Axis Data</AlertTitle>
@@ -237,45 +264,63 @@ export function DataLensDashboard() {
         </Alert>;
     }
 
-
     return (
-      <ResponsiveContainer width="100%" height={400}>
-        {selectedChartType === "bar" && (
-          <BarChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey={selectedXAxis} />
-            <YAxis />
-            <RechartsTooltip />
-            <Legend />
-            <Bar dataKey={selectedYAxis} fill={CHART_COLORS[0]} />
-          </BarChart>
-        )}
-        {selectedChartType === "line" && (
-          <RechartsTooltip contentStyle={{ backgroundColor: 'var(--background)', border: '1px solid var(--border)' }} itemStyle={{ color: 'var(--foreground)' }} wrapperClassName="rounded-md shadow-lg" />
-        )}
-        {selectedChartType === "pie" && (
-          <PieChart>
-            <Pie data={chartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={120} label>
-              {chartData.map((entry, index) => (
-                <RechartsCell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
-              ))}
-            </Pie>
-            <RechartsTooltip />
-            <Legend />
-          </PieChart>
-        )}
-        {selectedChartType === "scatter" && (
-          <ScatterChart>
-            <CartesianGrid />
-            <XAxis type="category" dataKey={selectedXAxis} name={selectedXAxis} />
-            <YAxis type="number" dataKey={selectedYAxis} name={selectedYAxis} />
-            <ZAxis range={[100]} /> {/* for bubble size if needed */}
-            <RechartsTooltip cursor={{ strokeDasharray: "3 3" }} />
-            <Legend />
-            <Scatter name={fileName || "Dataset"} data={chartData} fill={CHART_COLORS[0]} />
-          </ScatterChart>
-        )}
-      </ResponsiveContainer>
+      <ChartContainer config={chartConfig} className="min-h-[400px] w-full">
+        <ResponsiveContainer width="100%" height={400}>
+          {selectedChartType === "bar" && (
+            <BarChart data={chartData} accessibilityLayer>
+              <CartesianGrid vertical={false} />
+              <XAxis dataKey={selectedXAxis!} tickLine={false} tickMargin={10} axisLine={false} />
+              <YAxis tickLine={false} axisLine={false} tickMargin={10} />
+              <ChartTooltip content={<ChartTooltipContent hideLabel />} />
+              <ChartLegend content={<ChartLegendContent />} />
+              <Bar dataKey={selectedYAxis!} fill={`var(--color-${selectedYAxis!})`} radius={4} />
+            </BarChart>
+          )}
+          {selectedChartType === "line" && (
+            <LineChart data={chartData} accessibilityLayer>
+              <CartesianGrid vertical={false} />
+              <XAxis dataKey={selectedXAxis!} tickLine={false} tickMargin={10} axisLine={false} />
+              <YAxis tickLine={false} axisLine={false} tickMargin={10} />
+              <ChartTooltip content={<ChartTooltipContent indicator="line" />} />
+              <ChartLegend content={<ChartLegendContent />} />
+              <Line type="monotone" dataKey={selectedYAxis!} stroke={`var(--color-${selectedYAxis!})`} strokeWidth={2} activeDot={{ r: 8 }} />
+            </LineChart>
+          )}
+          {selectedChartType === "pie" && (
+            <PieChart accessibilityLayer>
+              <ChartTooltip content={<ChartTooltipContent hideLabel nameKey="name"/>} />
+              <Pie data={chartData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={120} labelLine={false} label={({ cx, cy, midAngle, innerRadius, outerRadius, percent, index, name }) => {
+                  const RADIAN = Math.PI / 180;
+                  const radius = innerRadius + (outerRadius - innerRadius) * 0.5;
+                  const x = cx + radius * Math.cos(-midAngle * RADIAN);
+                  const y = cy + radius * Math.sin(-midAngle * RADIAN);
+                  return ( (percent * 100) > 5 ? // Only show label if slice is > 5%
+                    <text x={x} y={y} fill="white" textAnchor={x > cx ? 'start' : 'end'} dominantBaseline="central" fontSize="12px">
+                      {`${name} (${(percent * 100).toFixed(0)}%)`}
+                    </text> : null
+                  );
+                }}>
+                {chartData.map((entry, index) => (
+                  <RechartsCell key={`cell-${index}`} fill={`hsl(var(--chart-${(index % 5) + 1}))`} />
+                ))}
+              </Pie>
+              <ChartLegend content={<ChartLegendContent nameKey="name" />} />
+            </PieChart>
+          )}
+          {selectedChartType === "scatter" && (
+            <RechartsScatterChart data={chartData} accessibilityLayer>
+              <CartesianGrid />
+              <XAxis type="category" dataKey={selectedXAxis!} name={selectedXAxis!} tickLine={false} tickMargin={10} axisLine={false} />
+              <YAxis type="number" dataKey={selectedYAxis!} name={selectedYAxis!} tickLine={false} axisLine={false} tickMargin={10} />
+              <ZAxis range={[60, 400]} /> {/* for bubble size if needed */}
+              <ChartTooltip content={<ChartTooltipContent indicator="dot" />} />
+              <ChartLegend content={<ChartLegendContent />} />
+              <Scatter name={fileName || "Dataset"} data={chartData} fill={`var(--color-${selectedYAxis!})`} />
+            </RechartsScatterChart>
+          )}
+        </ResponsiveContainer>
+      </ChartContainer>
     );
   };
 
