@@ -4,8 +4,8 @@ import { GeistMono } from 'geist/font/mono';
 import './globals.css';
 import { Toaster } from "@/components/ui/toaster";
 
-const geistSans = GeistSans; // Using direct import as per latest Geist recommendations
-const geistMono = GeistMono;
+// const geistSans = GeistSans; // Not needed, use GeistSans.variable directly
+// const geistMono = GeistMono; // Not needed, use GeistMono.variable directly
 
 export const metadata: Metadata = {
   title: 'Data Lens',
@@ -19,7 +19,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning>
-      <body className={`${geistSans.variable} ${geistMono.variable} font-sans antialiased`}>
+      <body className={`${GeistSans.variable} ${GeistMono.variable} font-sans antialiased`}>
         {children}
         <Toaster />
       </body>
